@@ -6,6 +6,10 @@ const FEED_URL = 'https://cdn.jsdelivr.net/gh/GCA-Classroom/apod/data.json'; // 
 const USE_APOD = false;                // set true to use NASA APOD API instead of class feed
 const APOD_API_KEY = 'DEMO_KEY';       // replace with your API key when USE_APOD = true
 
+// URL for a server-provided list of space facts (expected: JSON array of strings)
+// Update this to your class-provided facts endpoint if different.
+const FACTS_URL = 'https://cdn.jsdelivr.net/gh/GCA-Classroom/apod/facts.json';
+
 document.addEventListener('DOMContentLoaded', () => {
   // DOM references
   const startDateInput = document.getElementById('startDate');
@@ -38,8 +42,26 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // Show one random "Did you know?" fact
-  function showRandomFact() {
+  // Try to fetch a random fact from the server; fall back to the local FACTS array
+  async function showRandomFact() {
     if (!didYouKnowEl) return;
+    try {
+      const res = await fetch(FACTS_URL, { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        // Expecting an array of strings, e.g. ["fact1", "fact2", ...]
+        if (Array.isArray(json) && json.length > 0) {
+          const fact = json[Math.floor(Math.random() * json.length)];
+          didYouKnowEl.textContent = `💡 ${fact}`;
+          return;
+        }
+      }
+    } catch (err) {
+      // ignore and fall back
+      // eslint-disable-next-line no-console
+      console.warn('Could not fetch facts from server, using local facts:', err && err.message);
+    }
+    // fallback to local FACTS
     const fact = FACTS[Math.floor(Math.random() * FACTS.length)];
     didYouKnowEl.textContent = `💡 ${fact}`;
   }
@@ -247,12 +269,22 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Initialize UI: default start date (8 days before today) and show a random fact
-  (function init() {
+  (async function init() {
+    // set default start date to 8 days before today
     const today = new Date();
     const defaultStart = new Date(today);
     defaultStart.setDate(today.getDate() - 8);
     if (startDateInput) startDateInput.value = formatDate(defaultStart);
-    showRandomFact();
+
+    // fetch and display a random fact from the server (await so it runs on reload)
+    try {
+      await showRandomFact();
+    } catch (err) {
+      // fallback handled inside showRandomFact; log for debugging
+      // eslint-disable-next-line no-console
+      console.warn('showRandomFact failed during init:', err && err.message);
+    }
+
     if (modalEl) modalEl.hidden = true;
     if (loadingEl) loadingEl.hidden = true;
   })();
